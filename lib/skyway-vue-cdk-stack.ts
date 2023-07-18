@@ -3,6 +3,7 @@ import { Construct } from 'constructs';
 import * as dotenv from 'dotenv';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 
 dotenv.config();
 
@@ -11,15 +12,17 @@ export class SkywayVueCdkStack extends cdk.Stack {
     super(scope, id, props);
 
     // レイヤーの作成
-    const layer = new lambda.LayerVersion(this, 'jsonwebtoken', {
-      layerVersionName: 'jsonwebtoken',
+    const layerVersionName = 'jsonwebtoken';
+    const layer = new lambda.LayerVersion(this, layerVersionName, {
+      layerVersionName,
       code: lambda.Code.fromAsset('lambda_layer'),
       compatibleRuntimes: [lambda.Runtime.NODEJS_18_X],
     });
 
     // Lambda 関数の作成
-    const lambdaFunction = new lambda.Function(this, 'publishTokenFunction', {
-      functionName: 'publishToken',
+    const functionName = 'publishTokenFunction';
+    const lambdaFunction = new lambda.Function(this, functionName, {
+      functionName,
       runtime: lambda.Runtime.NODEJS_18_X,
       timeout: cdk.Duration.seconds(30),
       code: lambda.Code.fromAsset('lambda'),
@@ -32,8 +35,9 @@ export class SkywayVueCdkStack extends cdk.Stack {
     });
 
     // REST API の作成
-    const restApi = new apigateway.RestApi(this, 'publishTokenApi', {
-      restApiName: 'publishToken',
+    const restApiName = 'publishTokenApi';
+    const restApi = new apigateway.RestApi(this, restApiName, {
+      restApiName,
       endpointTypes: [apigateway.EndpointType.REGIONAL],
       deploy: true,
       defaultCorsPreflightOptions: {
@@ -42,6 +46,28 @@ export class SkywayVueCdkStack extends cdk.Stack {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
       },
     });
+
+    // ユーザープールの作成
+    const userPoolName = 'publishTokenUserPool';
+    const cognitoUserPool = new cognito.UserPool(this, userPoolName, {
+      userPoolName,
+      accountRecovery: cognito.AccountRecovery.NONE,
+      email: cognito.UserPoolEmail.withCognito(),
+      signInCaseSensitive: false,
+      autoVerify: { email: true },
+    });
+
+    // Authorizer の作成
+    const authorizerName = 'cognitoAuthorizer';
+    const authorizer = new apigateway.CognitoUserPoolsAuthorizer(
+      this,
+      authorizerName,
+      {
+        authorizerName,
+        cognitoUserPools: [cognitoUserPool],
+        identitySource: apigateway.IdentitySource.header('Authorization'),
+      }
+    );
 
     // レスポンスの作成
     const methodResponse: apigateway.MethodResponse = {
@@ -62,6 +88,8 @@ export class SkywayVueCdkStack extends cdk.Stack {
         integrationResponses: [integrationResponse],
       }),
       {
+        authorizer: authorizer,
+        authorizationType: apigateway.AuthorizationType.COGNITO,
         methodResponses: [methodResponse],
       }
     );
