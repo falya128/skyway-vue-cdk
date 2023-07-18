@@ -48,7 +48,7 @@ export class SkywayVueCdkStack extends cdk.Stack {
     });
 
     // ユーザープールの作成
-    const userPoolName = 'publishTokenUserPool';
+    const userPoolName = 'skyWayUserPool';
     const cognitoUserPool = new cognito.UserPool(this, userPoolName, {
       userPoolName,
       accountRecovery: cognito.AccountRecovery.NONE,
@@ -56,6 +56,13 @@ export class SkywayVueCdkStack extends cdk.Stack {
       signInCaseSensitive: false,
       autoVerify: { email: true },
     });
+
+    // ユーザープールクライアントの追加
+    const userPoolClientName = 'skyWayUserClient';
+    const cognitoUserPoolClient = cognitoUserPool.addClient(
+      userPoolClientName,
+      { userPoolClientName }
+    );
 
     // Authorizer の作成
     const authorizerName = 'cognitoAuthorizer';
@@ -75,9 +82,15 @@ export class SkywayVueCdkStack extends cdk.Stack {
       responseModels: {
         'application/json': apigateway.Model.EMPTY_MODEL,
       },
+      responseParameters: {
+        'method.response.header.Access-Control-Allow-Origin': true,
+      },
     };
     const integrationResponse: apigateway.IntegrationResponse = {
       statusCode: '200',
+      responseParameters: {
+        'method.response.header.Access-Control-Allow-Origin': "'*'",
+      },
     };
 
     // GET メソッドの追加
